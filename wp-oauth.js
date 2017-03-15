@@ -454,7 +454,7 @@ jQuery(document).ready(function() {
 		jQuery(".wpoa-login-message").remove();
 		var h = "";
 		h += "<div class='wpoa-login-message'><span>" + msg + "</span></div>";
-		jQuery("body").prepend(h);
+		jQuery(".x-message").append(h);
 		jQuery(".wpoa-login-message").fadeOut(5000);
 	}
 	

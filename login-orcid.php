@@ -1,25 +1,32 @@
 <?php
 
 // start the user session for maintaining individual user states during the multi-stage authentication flow:
-if (!isset($_SESSION)) {
-    session_start();
-}
+session_start();
 
 # DEFINE THE OAUTH PROVIDER AND SETTINGS TO USE #
-$_SESSION['WPOA']['PROVIDER'] = 'Facebook';
+$_SESSION['WPOA']['PROVIDER'] = 'ORCiD';
 define('HTTP_UTIL', get_option('wpoa_http_util'));
-define('CLIENT_ENABLED', get_option('wpoa_facebook_api_enabled'));
-define('CLIENT_ID', get_option('wpoa_facebook_api_id'));
-define('CLIENT_SECRET', get_option('wpoa_facebook_api_secret'));
-define('REDIRECT_URI', rtrim(site_url(), '/') . '/');
-define('SCOPE', 'email,user_about_me,user_location,user_website'); // PROVIDER SPECIFIC: 'email' is the minimum scope required to get the user's id from Facebook
-define('URL_AUTH', "https://www.facebook.com/dialog/oauth?");
-define('URL_TOKEN', "https://graph.facebook.com/oauth/access_token?");
-define('URL_USER', "https://graph.facebook.com/me?");
+define('CLIENT_ENABLED', get_option('wpoa_orcid_api_enabled'));
+define('CLIENT_ID', get_option('wpoa_orcid_api_id'));
+define('CLIENT_SECRET', get_option('wpoa_orcid_api_secret'));
+define('REDIRECT_URI', rtrim(site_url(), '/') . '/?');
+define('SCOPE', '/authenticate'); // PROVIDER SPECIFIC
+define('URL_AUTH', "https://orcid.org/oauth/authorize?");
+define('URL_TOKEN', "https://pub.orcid.org/oauth/token?");
+define('URL_USER', "https://api.orcid.org/v2.0//");
 # END OF DEFINE THE OAUTH PROVIDER AND SETTINGS TO USE #
 
 // remember the user's last url so we can redirect them back to there after the login ends:
-if (!$_SESSION['WPOA']['LAST_URL']) {$_SESSION['WPOA']['LAST_URL'] = strtok($_SERVER['HTTP_REFERER'], "?");}
+if (!$_SESSION['WPOA']['LAST_URL']) {
+	// try to obtain the redirect_url from the default login page:
+	$redirect_url = esc_url($_GET['redirect_to']);
+	// if no redirect_url was found, set it to the user's last page:
+	if (!$redirect_url) {
+		$redirect_url = strtok($_SERVER['HTTP_REFERER'], "?");
+	}
+	// set the user's last page so we can return that user there after they login:
+	$_SESSION['WPOA']['LAST_URL'] = $redirect_url;
+}
 
 # AUTHENTICATION FLOW #
 // the oauth 2.0 authentication flow will start in this script and make several calls to the third-party authentication provider which in turn will make callbacks to this script that we continue to handle until the login completes with a success or failure:
@@ -42,9 +49,9 @@ elseif (isset($_GET['code'])) {
 	// post-auth phase, verify the state:
 	if ($_SESSION['WPOA']['STATE'] == $_GET['state']) {
 		// get an access token from the third party provider:
-		get_oauth_token($this);
+		$oauth_identity = get_oauth_token($this);
 		// get the user's third-party identity and attempt to login/register a matching wordpress user account:
-		$oauth_identity = get_oauth_identity($this);
+		//$oauth_identity = get_oauth_identity($this);
 		$this->wpoa_login_user($oauth_identity);
 	}
 	else {
@@ -97,6 +104,8 @@ function get_oauth_token($wpoa) {
 			curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
 			curl_setopt($curl, CURLOPT_POST, 1);
 			curl_setopt($curl, CURLOPT_POSTFIELDS, $params);
+			// PROVIDER NORMALIZATION: Reddit requires sending a User-Agent header...
+			// PROVIDER NORMALIZATION: Reddit requires sending the client id/secret via http basic authentication
 			curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, (get_option('wpoa_http_util_verify_ssl') == 1 ? 1 : 0));
 			curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, (get_option('wpoa_http_util_verify_ssl') == 1 ? 2 : 0));
 			$result = curl_exec($curl);
@@ -118,20 +127,31 @@ function get_oauth_token($wpoa) {
 			break;
 	}
 	// parse the result:
-	parse_str($result, $result_obj); // PROVIDER SPECIFIC: Facebook encodes the access token result as a querystring by default
-	$access_token = $result_obj['access_token']; // PROVIDER SPECIFIC: this is how Facebook returns the access token KEEP THIS PROTECTED!
-	$expires_in = $result_obj['expires']; // PROVIDER SPECIFIC: this is how Facebook returns the access token's expiration
-	$expires_at = time() + $expires_in;
+	$result_obj = json_decode($result, true); // PROVIDER SPECIFIC: Google encodes the access token result as json by default
+	$access_token = $result_obj['access_token']; // PROVIDER SPECIFIC: this is how Google returns the access token KEEP THIS PROTECTED!
+	$orcid = $result_obj['orcid']; 
+	//$expires_in = $result_obj['expires_in']; // PROVIDER SPECIFIC: this is how Google returns the access token's expiration
+	//$expires_at = time() + $expires_in;
 	// handle the result:
-	if (!$access_token || !$expires_in) {
+	if (!$access_token) { // PROVIDER SPECIFIC: ...
 		// malformed access token result detected:
-		$wpoa->wpoa_end_login("Sorry, we couldn't log you in. Malformed access token result detected. Please notify the admin or try again later.");
-	}
-	else {
+		$wpoa->wpoa_end_login("$url - $params - $result - Sorry, we couldn't log you in. Malformed access token result detected. Please notify the admin or try again later.");
+	} else {
 		$_SESSION['WPOA']['ACCESS_TOKEN'] = $access_token;
-		$_SESSION['WPOA']['EXPIRES_IN'] = $expires_in;
-		$_SESSION['WPOA']['EXPIRES_AT'] = $expires_at;
-		return true;
+		$_SESSION['WPOA']['ORCID'] = $orcid;
+		//$_SESSION['WPOA']['EXPIRES_IN'] = $expires_in;
+		//$_SESSION['WPOA']['EXPIRES_AT'] = $expires_at;
+		// parse and return the user's oauth identity:
+		$oauth_identity = array();
+		$oauth_identity['provider'] = $_SESSION['WPOA']['PROVIDER'];
+		$oauth_identity['id'] = $orcid; // PROVIDER SPECIFIC: this is how ORCiD returns the user's unique id
+		$oauth_identity['orcid'] = $orcid; // PROVIDER SPECIFIC: this is how ORCiD returns the user's unique id
+		$oauth_identity['name'] = $result_obj['name']; // PROVIDER SPECIFIC: this is how ORCiD returns the user's unique id
+		//$oauth_identity['email'] = $result_obj['emails'][0]['value']; // PROVIDER SPECIFIC: Google returns an array of email addresses. To respect privacy we currently don't collect the user's email address.
+		if (!$oauth_identity['id']) {
+			$wpoa->wpoa_end_login("Sorry, we couldn't log you in. User identity was not found. Please notify the admin or try again later.");
+		}
+				return $oauth_identity;
 	}
 }
 
@@ -139,32 +159,32 @@ function get_oauth_identity($wpoa) {
 	// here we exchange the access token for the user info...
 	// set the access token param:
 	$params = array(
-		'access_token' => $_SESSION['WPOA']['ACCESS_TOKEN'], // PROVIDER SPECIFIC: the access token is passed to Facebook using this key name,		
+		'access_token' => $_SESSION['WPOA']['ACCESS_TOKEN'], // PROVIDER SPECIFIC: the access token is passed to Google using this key name
 	);
 	$url_params = http_build_query($params);
 	// perform the http request:
 	switch (strtolower(HTTP_UTIL)) {
 		case 'curl':
-			$url = URL_USER . $url_params . '&fields=id,name,email,location,website,about'; // TODO: we probably want to send this using a curl_setopt...
+			$url = URL_USER . $_SESSION['WPOA']['ORCID'] . '/email' .  $url_params; // TODO: we probably want to send this using a curl_setopt...
 			$curl = curl_init();
 			curl_setopt($curl, CURLOPT_URL, $url);
 			// PROVIDER NORMALIZATION: Reddit/Github requires a User-Agent here...
 			// PROVIDER NORMALIZATION: Reddit requires that we send the access token via a bearer header...
-			//curl_setopt($curl, CURLOPT_HTTPHEADER, array('x-li-format: json')); // PROVIDER SPECIFIC: I think this is only for LinkedIn...
+			// PROVIDER NORMALIZATION: LinkedIn requires an x-li-format: json header...
 			curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
 			$result = curl_exec($curl);
 			$result_obj = json_decode($result, true);
 			break;
 		case 'stream-context':
-			$url = URL_USER . 'fields=id,name,email,location,website,about'; #,user_about_me,user_hometown,user_location,user_website';
+			$url = rtrim(URL_USER . $_SESSION['WPOA']['ORCID'] . '/email', "?");
 			$opts = array('http' =>
 				array(
 					'method'  => 'GET',
 					// PROVIDER NORMALIZATION: Reddit/Github User-Agent
-					'header'  => "Authorization: Bearer " . $_SESSION['WPOA']['ACCESS_TOKEN'] . "\r\n" . "x-li-format: json\r\n", // PROVIDER SPECIFIC: i think only LinkedIn uses x-li-format...
+					'header'  => "Accept: application/json\r\n\Authorization type: Bearer\r\n\Access token: " . $_SESSION['WPOA']['ACCESS_TOKEN'] . "\r\n", // PROVIDER SPECIFIC: i think only LinkedIn uses x-li-format...
 				)
 			);
-			$context = stream_context_create($opts);
+			$context = $context  = stream_context_create($opts);
 			$result = @file_get_contents($url, false, $context);
 			if ($result === false) {
 				$wpoa->wpoa_end_login("Sorry, we couldn't log you in. Could not retrieve user identity via stream context. Please notify the admin or try again later.");
@@ -172,16 +192,12 @@ function get_oauth_identity($wpoa) {
 			$result_obj = json_decode($result, true);
 			break;
 	}
+	
 	// parse and return the user's oauth identity:
 	$oauth_identity = array();
 	$oauth_identity['provider'] = $_SESSION['WPOA']['PROVIDER'];
-	$oauth_identity['id'] = $result_obj['id']; // PROVIDER SPECIFIC: this is how Facebook returns the user's unique id
-	$oauth_identity['facebook_url'] = "https://www.facebook.com/" . $result_obj['id']; // PROVIDER SPECIFIC: 
-	$oauth_identity['name'] = $result_obj['name']; // PROVIDER SPECIFIC: this is how Facebook returns the user's unique id
-	$oauth_identity['email'] = $result_obj['email']; // PROVIDER SPECIFIC: this is how Facebook returns the user's unique id
-	$oauth_identity['location'] = $result_obj['location']; // PROVIDER SPECIFIC: this is how Facebook returns the user's unique id
-	$oauth_identity['website'] = $result_obj['website']; // PROVIDER SPECIFIC: this is how Facebook returns the user's unique id
-	$oauth_identity['description'] = $result_obj['about']; // PROVIDER SPECIFIC: this is how Facebook returns the user's unique id
+	$oauth_identity['id'] = $result_obj['id']; // PROVIDER SPECIFIC: this is how Google returns the user's unique id
+	//$oauth_identity['email'] = $result_obj['emails'][0]['value']; // PROVIDER SPECIFIC: Google returns an array of email addresses. To respect privacy we currently don't collect the user's email address.
 	if (!$oauth_identity['id']) {
 		$wpoa->wpoa_end_login("Sorry, we couldn't log you in. User identity was not found. Please notify the admin or try again later.");
 	}

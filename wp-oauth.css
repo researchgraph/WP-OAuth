@@ -5,8 +5,8 @@ body.wpoa-lightbox-visible {overflow:hidden;}
 #wpoa-login-form-design-form {display:none;}
 
 #wpoa-result {display:none;}
-.wpoa-login-message{text-align:center; left:0; right:0; top:5px; position:absolute; font-size:1em; z-index:999999;}
-.wpoa-login-message span {padding:4px 6px; background:#fff; color:#000; border-radius:5px; display:inline-block;}
+.wpoa-login-message{text-align:center; font-size:1em; }
+.wpoa-login-message span {padding:4px 6px; background:#fff; color:#000; border-radius:5px; display:inline-block; margin: 10px 0 0 0; background: #e6e6e6; width: 88%; }
 
 /*  SETTINGS PAGE
 =================*/
@@ -18,7 +18,7 @@ body.wpoa-lightbox-visible {overflow:hidden;}
 #wpoa_login_redirect_page {display:none;}
 #wpoa_logout_redirect_page {display:none;}
 
-#wpoa-settings-meta {float:right; text-align:right; color:#999; padding-top:9px;}
+#wpoa-settings-meta { text-align:right; color:#999; padding-top:0; position: absolute; top: 5px; right: 22px; }
 #wpoa-settings-meta ul {display:inline; margin-left:0;}
 #wpoa-settings-meta li {display:inline; margin-left:0.5em;}
 
@@ -185,3 +185,96 @@ body.wpoa-lightbox-visible {overflow:hidden;}
 /*  LINK-UNLINK PROVIDERS FORM STYLES
 =====================================*/
 .wpoa-linked-accounts {font-weight:bold;}
+
+
+
+#r-login-container {
+    width: 340px;
+    margin: 40px auto 0;
+}
+
+#r-login-container .wpoa-layout-buttons-column a {
+    margin-bottom: 12px;
+    border-radius: 5px;
+}
+
+#r-login-container .wpoa-layout-buttons-column #wpoa-login-facebook {
+    background: #3b5998 url("/wp-content/plugins/research-graph-wp-oauth/icons/round/ico-fb.png") no-repeat 20px center;
+    font-weight: bold;
+    color: #FFFFFF;
+}
+
+#r-login-container .wpoa-layout-buttons-column #wpoa-login-orcid {
+    background: #a6ce39 url("/wp-content/plugins/research-graph-wp-oauth/icons/round/ico-id.png") no-repeat 20px center;
+    font-weight: bold;
+    color: #FFFFFF;
+}
+
+#r-why-login {
+    position: relative;
+    display: block;
+    margin: 40px auto 20px;
+    text-decoration: none;
+    width: 340px;
+    line-height: 16px;
+    font-size: 12px;
+    text-align: center;
+    color: #666;
+    cursor: help;
+}
+
+#r-why-login .link {
+    color: #ff7f00;
+    border-bottom: 1px dashed #ff7f00;
+    
+}
+
+#r-why-login .hint {
+    position: absolute;
+    width: 340px;
+    padding: 20px;
+    background: #efefef;
+    border-radius: 20px;
+    top: 30px;
+    left: 0;
+    display: none;
+}
+
+#r-why-login:hover .hint {
+    display: block;
+}
+
+#r-why-login .hint:after {
+  content: "";
+  display: block;
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  width: 0;
+  height: 0;
+  margin-left: -15px;
+  border-left: 15px solid transparent;
+  border-right: 15px solid transparent;
+  border-bottom: 15px solid #efefef;
+ }
+ 
+@media (max-width: 500px) {
+    #r-login-container {
+        width: 100%;
+    }
+    
+    #r-why-login {
+        width: 100%;
+    }
+    #r-why-login .hint {
+        width: 100%;
+    }
+    
+    #r-login-container .wpoa-layout-buttons-column a {
+        padding: 10px 55px;
+        font-size: 16px;
+    }
+    #r-login-container .wpoa-layout-buttons-column #wpoa-login-facebook, #r-login-container .wpoa-layout-buttons-column #wpoa-login-orcid {
+        background-position: 10px center;
+    }
+}
